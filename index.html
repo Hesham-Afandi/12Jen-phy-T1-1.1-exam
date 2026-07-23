@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📝 امتحان الكهرباء الساكنة والشحن الكهربائي</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Cairo', sans-serif; }
+        body.en-mode { font-family: 'Inter', sans-serif; }
+        .correct { background-color: #dcfce7 !important; border-color: #16a34a !important; }
+        .incorrect { background-color: #fee2e2 !important; border-color: #dc2626 !important; }
+        .formula { font-family: 'Times New Roman', serif; direction: ltr; display: inline-block; font-style: italic; }
+        .timer-warning { color: #dc2626 !important; animation: pulse 1s infinite; }
+        @keyframes pulse { 50% { opacity: 0.7; } }
+        @media print { 
+            .no-print { display: none !important; } 
+            body { background: white; color: black; }
+            .answer-box { display: block !important; color: #166534 !important; }
+            #results-panel { display: block !important; box-shadow: none; border: 2px solid #000; }
+            svg { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+            .bg-gray-50 { background-color: #f9fafb !important; }
+        }
+        .success-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 0.875rem; }
+        .grade-excellent { background: #dcfce7; color: #166534; }
+        .grade-good { background: #fef3c7; color: #92400e; }
+        .grade-pass { background: #dbeafe; color: #1e40af; }
+        .grade-fail { background: #fee2e2; color: #991b1b; }
+        .lang-switch {
+            position: fixed; top: 16px; left: 16px; z-index: 100;
+            background: white; padding: 6px; border-radius: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15); display: flex; gap: 4px;
+            border: 2px solid #8b5cf6;
+        }
+        [dir="ltr"] .lang-switch { left: auto; right: 16px; }
+        .lang-btn {
+            padding: 6px 14px; border-radius: 20px; cursor: pointer; font-weight: bold;
+            transition: all 0.3s; border: none; font-size: 0.875rem;
+            background: transparent; color: #6b7280;
+        }
+        .lang-btn.active { background: #8b5cf6; color: white; box-shadow: 0 2px 6px rgba(139,92,246,0.4); }
+        .lang-btn:hover:not(.active) { background: #f5f3ff; color: #8b5cf6; }
+        .shuffle-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #f59e0b, #ef4444);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 p-4 md:p-8 min-h-screen">
+
+    <div class="lang-switch no-print">
+        <button type="button" class="lang-btn active" onclick="setLanguage('ar')" id="btn-ar">عربي</button>
+        <button type="button" class="lang-btn" onclick="setLanguage('en')" id="btn-en">EN</button>
+    </div>
+
+    <div id="timer-container" class="max-w-4xl mx-auto mb-4 text-center no-print">
+        <div class="bg-white p-4 rounded-xl shadow-md inline-block border-2 border-purple-100">
+            <span class="text-gray-600 ml-2" data-ar="⏱️ الوقت المتبقي:" data-en="⏱️ Time Remaining:">⏱️ الوقت المتبقي:</span>
+            <span id="timer" class="text-2xl font-bold text-purple-600 font-mono">60:00</span>
+            <span class="shuffle-badge" data-ar="🔀 أسئلة عشوائية" data-en="🔀 Random Questions">🔀 أسئلة عشوائية</span>
+        </div>
+    </div>
+
+    <div class="max-w-4xl mx-auto mb-6 flex flex-wrap gap-3 justify-center no-print">
+        <button type="button" onclick="toggleAnswers()" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-lg font-medium transition shadow cursor-pointer" data-ar="👁️ إظهار / إخفاء الإجابات" data-en="👁️ Show / Hide Answers">👁️ إظهار / إخفاء الإجابات</button>
+        <button type="button" onclick="window.print()" class="bg-gray-800 hover:bg-gray-900 text-white px-5 py-2 rounded-lg font-medium transition shadow cursor-pointer" data-ar="🖨️ طباعة / PDF" data-en="🖨️ Print / PDF">🖨️ طباعة / PDF</button>
+        <button type="button" onclick="reshuffleExam()" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-5 py-2 rounded-lg font-medium transition shadow cursor-pointer" data-ar="🔀 إعادة خلط الأسئلة" data-en="🔀 Reshuffle Questions">🔀 إعادة خلط الأسئلة</button>
+    </div>
+
+    <header class="max-w-4xl mx-auto bg-white p-6 rounded-xl shadow-md mb-8 border-r-4 border-purple-600">
+        <div class="text-center">
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-900 mb-2" data-ar="📝 امتحان الكهرباء الساكنة والشحن الكهربائي" data-en="📝 Static Electricity and Charging Exam">📝 امتحان الكهرباء الساكنة والشحن الكهربائي</h1>
+            <h2 class="text-lg text-purple-600 font-semibold" data-ar="Electrostatics and Charge" data-en="Electrostatics and Charge">Electrostatics and Charge</h2>
+            <p class="text-sm text-gray-600 mt-2" data-ar="امتحان شامل للمفاهيم الأساسية، قوانين التجاذب والتنافر، التجارب العملية، والتطبيقات الحياتية" data-en="Comprehensive exam on basic concepts, attraction/repulsion laws, practical experiments, and real-life applications">امتحان شامل للمفاهيم الأساسية، قوانين التجاذب والتنافر، التجارب العملية، والتطبيقات الحياتية</p>
+            <p class="text-xs text-purple-600 mt-2 font-semibold" data-ar="⚠️ ملاحظة: يتم خلط ترتيب الأسئلة والخيارات تلقائياً مع كل تحديث للصفحة" data-en="⚠️ Note: Questions and options are randomly shuffled on every page refresh">⚠️ ملاحظة: يتم خلط ترتيب الأسئلة والخيارات تلقائياً مع كل تحديث للصفحة</p>
+        </div>
+        <div class="mt-4 flex flex-wrap justify-center gap-4 text-sm text-gray-600">
+            <span><span data-ar="📅 التاريخ:" data-en="📅 Date:">📅 التاريخ:</span> <input type="date" id="examDate" class="border-b border-gray-400 bg-transparent w-32 text-center"></span>
+            <span><span data-ar="👤 الاسم:" data-en="👤 Name:">👤 الاسم:</span> <input type="text" id="studentName" class="border-b border-gray-400 bg-transparent w-32 text-center" placeholder="Enter name" required></span>
+            <span><span data-ar="🏫 الشعبة:" data-en="🏫 Class:">🏫 الشعبة:</span> <input type="text" id="studentClass" class="border-b border-gray-400 bg-transparent w-28 text-center" placeholder="Class"></span>
+            <span><span data-ar="⏱️ المدة: 60 دقيقة" data-en="⏱️ Duration: 60 min">⏱️ المدة: 60 دقيقة</span></span>
+            <span><span data-ar="📊 المجموع: 50 درجة" data-en="📊 Total: 50 pts">📊 المجموع: 50 درجة</span></span>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto space-y-8" id="exam-content"></main>
+
+    <div class="text-center no-print pb-8 mt-8">
+        <button type="button" onclick="gradeExam()" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-lg px-10 py-4 rounded-xl font-bold shadow-xl transition transform hover:scale-105 cursor-pointer" data-ar="📝 تسليم وتصحيح الامتحان" data-en="📝 Submit & Grade Exam">📝 تسليم وتصحيح الامتحان</button>
+    </div>
+
+    <div id="results-panel" class="max-w-4xl mx-auto mt-8 bg-white p-8 rounded-2xl shadow-2xl border-t-4 border-emerald-500 hidden no-print">
+        <h2 class="text-3xl font-bold text-gray-900 mb-6 text-center" data-ar="📊 نتائج الامتحان" data-en="📊 Exam Results">📊 نتائج الامتحان</h2>
+        <div class="grid md:grid-cols-3 gap-4 mb-6">
+            <div class="bg-blue-50 p-4 rounded-xl text-center"><p data-ar="اسم الطالب" data-en="Student Name">اسم الطالب</p><p id="res-name" class="font-bold text-xl text-purple-700">-</p></div>
+            <div class="bg-purple-50 p-4 rounded-xl text-center"><p data-ar="التاريخ" data-en="Date">التاريخ</p><p id="res-date" class="font-bold text-xl text-purple-700">-</p></div>
+            <div class="bg-emerald-50 p-4 rounded-xl text-center"><p data-ar="المجموع" data-en="Score">المجموع</p><p id="res-total" class="font-bold text-3xl text-emerald-600">0 / 50</p></div>
+        </div>
+        <div class="text-center mb-6">
+            <span id="success-badge" class="success-badge grade-excellent">-</span>
+            <p id="success-percent" class="text-4xl font-bold text-emerald-600 mt-2">100%</p>
+            <p class="text-sm text-gray-500" data-ar="نسبة النجاح" data-en="Success Rate">نسبة النجاح</p>
+        </div>
+        <div class="bg-gray-50 p-6 rounded-xl mb-6">
+            <h3 class="font-bold text-lg mb-4 text-gray-800" data-ar="📈 تفصيل الأداء حسب القسم:" data-en="📈 Performance Breakdown:">📈 تفصيل الأداء حسب القسم:</h3>
+            <div class="space-y-3">
+                <div class="flex justify-between items-center"><span class="text-gray-700" data-ar="المفاهيم والمصطلحات الأساسية" data-en="Basic Concepts and Terminology">المفاهيم والمصطلحات الأساسية</span><span id="sec1-score" class="font-bold text-purple-600">0/10</span></div>
+                <div class="flex justify-between items-center"><span class="text-gray-700" data-ar="خصائص الشحنات وقوانين التجاذب" data-en="Charge Properties and Attraction Laws">خصائص الشحنات وقوانين التجاذب</span><span id="sec2-score" class="font-bold text-purple-600">0/10</span></div>
+                <div class="flex justify-between items-center"><span class="text-gray-700" data-ar="آليات الشحن والتجارب العملية" data-en="Charging Mechanisms and Experiments">آليات الشحن والتجارب العملية</span><span id="sec3-score" class="font-bold text-purple-600">0/10</span></div>
+                <div class="flex justify-between items-center"><span class="text-gray-700" data-ar="الموصلات والعوازل والتطبيقات" data-en="Conductors, Insulators and Applications">الموصلات والعوازل والتطبيقات</span><span id="sec4-score" class="font-bold text-purple-600">0/10</span></div>
+                <div class="flex justify-between items-center"><span class="text-gray-700" data-ar="التفريغ الكهربائي والتفكير النقدي" data-en="Electrical Discharge and Critical Thinking">التفريغ الكهربائي والتفكير النقدي</span><span id="sec5-score" class="font-bold text-purple-600">0/10</span></div>
+            </div>
+        </div>
+        <div class="text-center mb-6">
+            <button type="button" id="sendEmailBtn" onclick="sendResultsToEmail()" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-lg px-8 py-3 rounded-xl font-bold shadow-xl transition transform hover:scale-105 cursor-pointer" data-ar="📧 إرسال النتائج للمعلم" data-en="📧 Send Results to Teacher">📧 إرسال النتائج للمعلم</button>
+            <p id="emailStatus" class="text-sm mt-2 text-center font-medium"></p>
+        </div>
+        <div class="flex gap-3 justify-center">
+            <button type="button" onclick="window.print()" class="bg-gray-700 text-white px-6 py-3 rounded-lg font-semibold" data-ar="🖨️ طباعة النتائج" data-en="🖨️ Print Results">🖨️ طباعة النتائج</button>
+        </div>
+    </div>
+
+    <footer class="max-w-4xl mx-auto mt-10 mb-8 text-center text-gray-500 text-sm no-print">
+        © <span data-ar="Static Electricity and Charging" data-en="Static Electricity and Charging">Static Electricity and Charging</span> | Mr. Mohammed Hesham
+    </footer>
+
+<script>
+// ==================== EmailJS Settings ====================
+const PUBLIC_KEY = "Rb3Lq8tXaFmc5YHUH";
+const SERVICE_ID = "service_w15m64i";
+const TEMPLATE_ID = "template_5b0u2tq";
+const TARGET_EMAIL = "mohammedhesham872@gmail.com";
+
+emailjs.init(PUBLIC_KEY);
+
+// ==================== SVG Graphics Templates for Electrostatics ====================
+const svgAttractionRepulsion = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 150" class="w-64 h-32 mx-auto my-2 drop-shadow-sm">
+    <circle cx="70" cy="75" r="30" fill="#fee2e2" stroke="#dc2626" stroke-width="3"/>
+    <text x="70" y="82" font-size="24" fill="#dc2626" font-weight="bold" text-anchor="middle">+</text>
+    <circle cx="130" cy="75" r="30" fill="#fee2e2" stroke="#dc2626" stroke-width="3"/>
+    <text x="130" y="82" font-size="24" fill="#dc2626" font-weight="bold" text-anchor="middle">+</text>
+    <path d="M 100 60 L 110 75 L 100 90" fill="none" stroke="#dc2626" stroke-width="3"/>
+    <path d="M 200 60 L 190 75 L 200 90" fill="none" stroke="#dc2626" stroke-width="3"/>
+    <circle cx="220" cy="75" r="30" fill="#fee2e2" stroke="#dc2626" stroke-width="3"/>
+    <text x="220" y="82" font-size="24" fill="#dc2626" font-weight="bold" text-anchor="middle">+</text>
+    <circle cx="280" cy="75" r="30" fill="#dbeafe" stroke="#2563eb" stroke-width="3"/>
+    <text x="280" y="82" font-size="24" fill="#2563eb" font-weight="bold" text-anchor="middle">-</text>
+    <path d="M 250 65 L 260 75 L 250 85" fill="none" stroke="#2563eb" stroke-width="3"/>
+    <path d="M 170 65 L 160 75 L 170 85" fill="none" stroke="#2563eb" stroke-width="3"/>
+    <text x="100" y="135" font-size="12" fill="#4b5563" font-weight="bold" text-anchor="middle">تنافر (Repel) | تجاذب (Attract)</text>
+</svg>`;
+
+const svgElectronTransfer = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 150" class="w-64 h-32 mx-auto my-2 drop-shadow-sm">
+    <rect x="20" y="60" width="80" height="40" fill="#fef3c7" stroke="#d97706" stroke-width="2" rx="5"/>
+    <text x="60" y="85" font-size="14" fill="#92400e" font-weight="bold" text-anchor="middle">صوف (Wool)</text>
+    <rect x="180" y="60" width="100" height="40" fill="#4b5563" stroke="#1f2937" stroke-width="2" rx="5"/>
+    <text x="230" y="85" font-size="14" fill="#ffffff" font-weight="bold" text-anchor="middle">مطاط (Rubber)</text>
+    <circle cx="110" cy="70" r="6" fill="#2563eb"/>
+    <circle cx="125" cy="80" r="6" fill="#2563eb"/>
+    <circle cx="110" cy="90" r="6" fill="#2563eb"/>
+    <path d="M 115 70 L 165 70" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+    <path d="M 130 80 L 175 80" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+    <path d="M 115 90 L 165 90" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+    <defs>
+        <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#2563eb" />
+        </marker>
+    </defs>
+    <text x="150" y="135" font-size="12" fill="#4b5563" font-weight="bold" text-anchor="middle">انتقال الإلكترونات (e⁻)</text>
+</svg>`;
+
+const svgWireStructure = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 150" class="w-64 h-32 mx-auto my-2 drop-shadow-sm">
+    <rect x="20" y="50" width="260" height="50" fill="#fcd34d" stroke="#d97706" stroke-width="2" rx="5"/>
+    <text x="150" y="80" font-size="14" fill="#92400e" font-weight="bold" text-anchor="middle">نحاس (موصل - Conductor)</text>
+    <path d="M 20 50 Q 150 10 280 50" fill="#ef4444" stroke="#b91c1c" stroke-width="2"/>
+    <path d="M 20 100 Q 150 140 280 100" fill="#ef4444" stroke="#b91c1c" stroke-width="2"/>
+    <text x="150" y="35" font-size="12" fill="#b91c1c" font-weight="bold" text-anchor="middle">بلاستيك (عازل - Insulator)</text>
+    <text x="150" y="135" font-size="12" fill="#4b5563" font-weight="bold" text-anchor="middle">تركيب السلك الكهربائي</text>
+</svg>`;
+
+const svgGrounding = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 150" class="w-64 h-32 mx-auto my-2 drop-shadow-sm">
+    <circle cx="150" cy="50" r="30" fill="#fee2e2" stroke="#dc2626" stroke-width="3"/>
+    <text x="150" y="57" font-size="20" fill="#dc2626" font-weight="bold" text-anchor="middle">-</text>
+    <line x1="150" y1="80" x2="150" y2="120" stroke="#4b5563" stroke-width="3"/>
+    <line x1="120" y1="120" x2="180" y2="120" stroke="#4b5563" stroke-width="3"/>
+    <line x1="130" y1="130" x2="170" y2="130" stroke="#4b5563" stroke-width="3"/>
+    <line x1="140" y1="140" x2="160" y2="140" stroke="#4b5563" stroke-width="3"/>
+    <path d="M 150 90 L 140 100 L 160 100 L 150 110" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrowG)"/>
+    <defs>
+        <marker id="arrowG" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#2563eb" />
+        </marker>
+    </defs>
+    <text x="150" y="148" font-size="12" fill="#4b5563" font-weight="bold" text-anchor="middle">التأريض (Grounding)</text>
+</svg>`;
+
+const originalExamData = {
+    sections: [
+        {
+            id: 'sec1',
+            title: { ar: '🔹 الجزء الأول: المفاهيم والمصطلحات الأساسية', en: '🔹 Part 1: Basic Concepts and Terminology' },
+            questions: [
+                { q: { ar: 'ما هو علم الكهرباء الساكنة (Electrostatics)؟', en: 'What is Electrostatics?' }, options: [ { ar: 'علم يدرس الشحنات الكهربائية الساكنة وتجميعها في مكان واحد', en: 'The study of stationary electric charges and their accumulation' }, { ar: 'علم يدرس التيار الكهربائي المتحرك', en: 'The study of moving electric current' }, { ar: 'علم يدرس المغناطيسية فقط', en: 'The study of magnetism only' }, { ar: 'علم يدرس تحويل الطاقة الحرارية', en: 'The study of thermal energy conversion' } ], correct: 0, answer: { ar: 'الكهرباء الساكنة تدرس الشحنات الساكنة وتجميعها', en: 'Electrostatics studies stationary charges and their accumulation' } },
+                { q: { ar: 'متى يكون الجسم متعادلاً (Neutral)؟', en: 'When is an object considered neutral?' }, options: [ { ar: 'عندما يحتوي على عدد متساوٍ من الشحنات الموجبة والسالبة', en: 'When it contains an equal number of positive and negative charges' }, { ar: 'عندما يكون مشحوناً بشحنة موجبة فقط', en: 'When it is charged positively only' }, { ar: 'عندما يفقد جميع إلكتروناته', en: 'When it loses all its electrons' }, { ar: 'عندما يكون معزولاً تماماً', en: 'When it is completely isolated' } ], correct: 0, answer: { ar: 'الجسم المتعادل يحتوي على شحنات موجبة وسالبة متساوية', en: 'A neutral object has equal positive and negative charges' } },
+                { q: { ar: 'ما تعريف العازل (Insulator)؟', en: 'What is the definition of an insulator?' }, options: [ { ar: 'مادة لا تنتقل خلالها الشحنات الكهربائية بسهولة', en: 'A material through which electric charges do not move easily' }, { ar: 'مادة تسمح للشحنات بالانتقال بسهولة', en: 'A material that allows charges to move easily' }, { ar: 'مادة تتكون من بلازما فقط', en: 'A material made only of plasma' }, { ar: 'مادة تفقد بروتوناتها بسرعة', en: 'A material that loses protons quickly' } ], correct: 0, answer: { ar: 'العازل يمنع انتقال الشحنات بسهولة (مثل البلاستيك والزجاج)', en: 'An insulator prevents easy charge movement (e.g., plastic, glass)' } },
+                { q: { ar: 'أي من المواد التالية يُعد موصلاً جيداً (Conductor)؟', en: 'Which of the following is a good conductor?' }, options: [ { ar: 'النحاس والألمنيوم', en: 'Copper and Aluminum' }, { ar: 'الخشب الجاف', en: 'Dry wood' }, { ar: 'البلاستيك', en: 'Plastic' }, { ar: 'الهواء الجاف', en: 'Dry air' } ], correct: 0, answer: { ar: 'المعادن مثل النحاس والألمنيوم هي موصلات جيدة', en: 'Metals like copper and aluminum are good conductors' } },
+                { q: { ar: 'ما هي البلازما (Plasma)؟', en: 'What is Plasma?' }, options: [ { ar: 'حالة مادة تشبه الغاز، تتكون من إلكترونات حرة وأيونات موجبة', en: 'A gas-like state consisting of free electrons and positive ions' }, { ar: 'حالة صلبة من المواد العازلة', en: 'A solid state of insulating materials' }, { ar: 'سائل لا يوصل الكهرباء أبداً', en: 'A liquid that never conducts electricity' }, { ar: 'غاز نقي لا يحتوي على أي شحنات', en: 'A pure gas containing no charges' } ], correct: 0, answer: { ar: 'البلازما حالة غازية تحتوي على إلكترونات حرة وأيونات موجبة وتوصل الكهرباء', en: 'Plasma is a gas-like state with free electrons and positive ions, conducting electricity' } },
+                { q: { ar: 'لماذا يُصنف الهواء الجاف كعازل؟', en: 'Why is dry air classified as an insulator?' }, options: [ { ar: 'لأنه لا يسمح بانتقال الشحنات الكهربائية بسهولة', en: 'Because it does not allow electric charges to move easily' }, { ar: 'لأنه يحتوي على إلكترونات حرة كثيرة', en: 'Because it contains many free electrons' }, { ar: 'لأنه موصل فائق للكهرباء', en: 'Because it is a superconductor' }, { ar: 'لأنه يجذب البروتونات فقط', en: 'Because it attracts protons only' } ], correct: 0, answer: { ar: 'الهواء الجاف عازل يمنع تسرب الشحنات', en: 'Dry air is an insulator that prevents charge leakage' } },
+                { q: { ar: 'الصدمة الخفيفة عند لمس مقبض باب معدني في يوم جاف هي مثال على:', en: 'A slight shock when touching a metal door handle on a dry day is an example of:' }, options: [ { ar: 'الكهرباء الساكنة', en: 'Static electricity' }, { ar: 'التيار المتردد', en: 'Alternating current' }, { ar: 'المغناطيسية الأرضية', en: 'Earth magnetism' }, { ar: 'التوصيل الحراري', en: 'Thermal conduction' } ], correct: 0, answer: { ar: 'هذه الظاهرة ناتجة عن تفريغ الشحنات الكهربائية الساكنة المتراكمة', en: 'This phenomenon is caused by the discharge of accumulated static electricity' } },
+                { q: { ar: 'أي من التالي يُعد عازلاً كهربائياً؟', en: 'Which of the following is an electrical insulator?' }, options: [ { ar: 'الزجاج', en: 'Glass' }, { ar: 'الحديد', en: 'Iron' }, { ar: 'مياه الصنبور', en: 'Tap water' }, { ar: 'الجرافيت', en: 'Graphite' } ], correct: 0, answer: { ar: 'الزجاج من المواد العازلة التي لا تنقل الشحنات بسهولة', en: 'Glass is an insulating material that does not easily transfer charges' } },
+                { q: { ar: 'ما الخاصية التي تميز الموصل عن العازل؟', en: 'What property distinguishes a conductor from an insulator?' }, options: [ { ar: 'سهولة انتقال الشحنات الكهربائية عبره', en: 'The ease of electric charge movement through it' }, { ar: 'لونه وشفافيته', en: 'Its color and transparency' }, { ar: 'كثافته فقط', en: 'Its density only' }, { ar: 'قدرته على امتصاص الضوء', en: 'Its ability to absorb light' } ], correct: 0, answer: { ar: 'الموصل يسمح للشحنات بالانتقال بسهولة، بينما العازل يمنع ذلك', en: 'A conductor allows easy charge movement, while an insulator prevents it' } },
+                { q: { ar: 'حالة المادة التي تعد موصلاً جيداً بسبب وجود أيونات موجبة وإلكترونات حرة هي:', en: 'The state of matter that is a good conductor due to positive ions and free electrons is:' }, options: [ { ar: 'البلازما', en: 'Plasma' }, { ar: 'الحالة الصلبة العازلة', en: 'Solid insulating state' }, { ar: 'الحالة السائلة النقية', en: 'Pure liquid state' }, { ar: 'الحالة الغازية المتعادلة', en: 'Neutral gaseous state' } ], correct: 0, answer: { ar: 'البلازما موصل جيد بسبب مكوناتها من إلكترونات حرة وأيونات', en: 'Plasma is a good conductor due to its free electrons and ions' } }
+            ]
+        },
+        {
+            id: 'sec2',
+            title: { ar: '🔹 الجزء الثاني: خصائص الشحنات وقوانين التجاذب', en: '🔹 Part 2: Charge Properties and Attraction Laws' },
+            questions: [
+                { 
+                    q: { ar: 'ماذا يحدث عند تقريب شحنتين متشابهتين (موجب مع موجب) من بعضهما؟', en: 'What happens when two like charges (positive and positive) are brought close?' },
+                    image: svgAttractionRepulsion,
+                    options: [ { ar: 'تتنافران', en: 'They repel each other' }, { ar: 'تتجاذبان', en: 'They attract each other' }, { ar: 'تتعادلان فوراً', en: 'They neutralize immediately' }, { ar: 'لا يتأثر أي منهما', en: 'Neither is affected' } ], 
+                    correct: 0, 
+                    answer: { ar: 'الشحنات المتشابهة تتنافر دائماً', en: 'Like charges always repel each other' } 
+                },
+                { 
+                    q: { ar: 'ماذا يحدث عند تقريب شحنتين مختلفتين (موجب مع سالب) من بعضهما؟', en: 'What happens when two opposite charges (positive and negative) are brought close?' },
+                    image: svgAttractionRepulsion,
+                    options: [ { ar: 'تتجاذبان', en: 'They attract each other' }, { ar: 'تتنافران', en: 'They repel each other' }, { ar: 'تتحولان إلى طاقة حرارية', en: 'They convert to thermal energy' }, { ar: 'تصبحان متعادلتين دون تلامس', en: 'They become neutral without contact' } ], 
+                    correct: 0, 
+                    answer: { ar: 'الشحنات المختلفة تتجاذب دائماً', en: 'Opposite charges always attract each other' } 
+                },
+                { q: { ar: 'من هو العالم الذي سمى نوعي الشحنة الكهربائية بـ "الموجبة" و"السالبة"؟', en: 'Who named the two types of electric charge "positive" and "negative"?' }, options: [ { ar: 'بنجامين فرانكلين', en: 'Benjamin Franklin' }, { ar: 'إسحاق نيوتن', en: 'Isaac Newton' }, { ar: 'ألبرت أينشتاين', en: 'Albert Einstein' }, { ar: 'مايكل فاراداي', en: 'Michael Faraday' } ], correct: 0, answer: { ar: 'بنجامين فرانكلين هو من أطلق هذه التسميات', en: 'Benjamin Franklin coined these terms' } },
+                { q: { ar: 'أي الجسيمات دون الذرية يحمل شحنة كهربائية موجبة؟', en: 'Which subatomic particle carries a positive electric charge?' }, options: [ { ar: 'البروتون', en: 'Proton' }, { ar: 'الإلكترون', en: 'Electron' }, { ar: 'النيوترون', en: 'Neutron' }, { ar: 'الفوتون', en: 'Photon' } ], correct: 0, answer: { ar: 'البروتون يحمل شحنة موجبة ويثبت في النواة', en: 'The proton carries a positive charge and is fixed in the nucleus' } },
+                { q: { ar: 'أي الجسيمات دون الذرية ينتقل من جسم إلى آخر أثناء عملية الشحن؟', en: 'Which subatomic particle moves from one object to another during charging?' }, options: [ { ar: 'الإلكترون', en: 'Electron' }, { ar: 'البروتون', en: 'Proton' }, { ar: 'النيوترون', en: 'Neutron' }, { ar: 'النواة', en: 'Nucleus' } ], correct: 0, answer: { ar: 'الإلكترونات هي التي تنتقل بسبب كتلتها الضئيلة وموقعها الخارجي', en: 'Electrons move due to their tiny mass and outer location' } },
+                { q: { ar: 'ماذا يعني أن الشحنة الكهربائية "محفوظة"؟', en: 'What does it mean that electric charge is "conserved"?' }, options: [ { ar: 'لا تُفنى ولا تُستحدث من العدم، بل تنتقل من جسم لآخر', en: 'It is neither created nor destroyed, only transferred' }, { ar: 'تختفي تماماً عند فرك جسمين', en: 'It completely disappears when rubbing two objects' }, { ar: 'تزداد كتلتها عند الانتقال', en: 'Its mass increases when transferred' }, { ar: 'تتحول إلى طاقة ضوئية فقط', en: 'It converts only to light energy' } ], correct: 0, answer: { ar: 'قانون حفظ الشحنة: الشحنة الكلية تبقى ثابتة، وتنتقل الإلكترونات فقط', en: 'Conservation of charge: Total charge remains constant, only electrons move' } },
+                { q: { ar: 'الشحنة الكهربائية هي:', en: 'Electric charge is:' }, options: [ { ar: 'خاصية للمادة وليست مادة بحد ذاتها', en: 'A property of matter, not a substance itself' }, { ar: 'سائل يتدفق داخل الأسلاك', en: 'A liquid flowing inside wires' }, { ar: 'نوع من أنواع الغازات', en: 'A type of gas' }, { ar: 'طاقة حرارية فقط', en: 'Only thermal energy' } ], correct: 0, answer: { ar: 'الشحنة خاصية أساسية للمادة مثل الكتلة', en: 'Charge is a fundamental property of matter, like mass' } },
+                { q: { ar: 'لماذا تبقى البروتونات مثبتة داخل نواة الذرة ولا تنتقل أثناء الشحن؟', en: 'Why do protons remain fixed in the nucleus and do not move during charging?' }, options: [ { ar: 'لأنها مرتبطة بقوة نووية شديدة وكتلتها كبيرة', en: 'Because they are bound by strong nuclear force and have large mass' }, { ar: 'لأنها لا تحمل شحنة كهربائية', en: 'Because they carry no electric charge' }, { ar: 'لأنها أخف وزناً من الإلكترونات', en: 'Because they are lighter than electrons' }, { ar: 'لأنها توجد خارج الذرة', en: 'Because they exist outside the atom' } ], correct: 0, answer: { ar: 'البروتونات ثقيلة ومربوطة بقوة في النواة، بينما الإلكترونات خارجية وخفيفة', en: 'Protons are heavy and tightly bound in the nucleus, while electrons are outer and light' } },
+                { q: { ar: 'كم عدد أنواع الشحنات الكهربائية الأساسية؟', en: 'How many basic types of electric charges are there?' }, options: [ { ar: 'نوعان فقط (موجب وسالب)', en: 'Only two types (positive and negative)' }, { ar: 'ثلاثة أنواع', en: 'Three types' }, { ar: 'نوع واحد فقط', en: 'Only one type' }, { ar: 'أربعة أنواع', en: 'Four types' } ], correct: 0, answer: { ar: 'يوجد نوعان فقط: موجبة وسالبة', en: 'There are only two types: positive and negative' } },
+                { q: { ar: 'إذا كان جسم يحتوي على إلكترونات أكثر من البروتونات، فإن شحنته تكون:', en: 'If an object has more electrons than protons, its charge is:' }, options: [ { ar: 'سالبة', en: 'Negative' }, { ar: 'موجبة', en: 'Positive' }, { ar: 'متعادلة', en: 'Neutral' }, { ar: 'بلازما', en: 'Plasma' } ], correct: 0, answer: { ar: 'زيادة الإلكترونات (السالبة) تجعل الشحنة الكلية سالبة', en: 'An excess of (negative) electrons makes the net charge negative' } }
+            ]
+        },
+        {
+            id: 'sec3',
+            title: { ar: '🔹 الجزء الثالث: آليات الشحن والتجارب العملية', en: '🔹 Part 3: Charging Mechanisms and Experiments' },
+            questions: [
+                { 
+                    q: { ar: 'ماذا يحدث عند فرك قضيب مطاطي بقطعة صوف؟', en: 'What happens when a rubber rod is rubbed with wool?' },
+                    image: svgElectronTransfer,
+                    options: [ { ar: 'تنتقل إلكترونات من الصوف إلى المطاط، فيصبح المطاط سالباً والصوف موجباً', en: 'Electrons move from wool to rubber, making rubber negative and wool positive' }, { ar: 'تنتقل بروتونات من المطاط إلى الصوف', en: 'Protons move from rubber to wool' }, { ar: 'يظل كلاهما متعادلاً', en: 'Both remain neutral' }, { ar: 'يصبح المطاط موجباً والصوف سالباً', en: 'Rubber becomes positive and wool becomes negative' } ], 
+                    correct: 0, 
+                    answer: { ar: 'المطاط يكتسب إلكترونات من الصوف فيصبح سالباً، والصوف يفقدها فيصبح موجباً', en: 'Rubber gains electrons from wool (becomes negative), wool loses them (becomes positive)' } 
+                },
+                { q: { ar: 'في تجربة الشريطين البلاستيكيين، ماذا يحدث عند فركهما بقطعة قماش وتعليقهما متجاورين؟', en: 'In the two plastic strips experiment, what happens when rubbed with cloth and hung side by side?' }, options: [ { ar: 'سيتنافران لأنهما اكتسبا نفس نوع الشحنة', en: 'They will repel because they gained the same type of charge' }, { ar: 'سيتجاذبان لأنهما اكتسبا شحنات مختلفة', en: 'They will attract because they gained opposite charges' }, { ar: 'سيظلان متدليين دون حركة', en: 'They will hang without movement' }, { ar: 'سيحترقان بسبب الاحتكاك', en: 'They will burn due to friction' } ], correct: 0, answer: { ar: 'الشريطان يكتسبان نفس الشحنة بالسالب، والشحنات المتشابهة تتنافر', en: 'Both strips gain negative charge, and like charges repel' } },
+                { q: { ar: 'كيف يحدث الشحن بالتلامس (Contact Charging)؟', en: 'How does charging by contact occur?' }, options: [ { ar: 'عن طريق انتقال الإلكترونات من جسم مشحون إلى جسم متعادل عند اللمس', en: 'By transfer of electrons from a charged object to a neutral one upon contact' }, { ar: 'عن طريق انتقال البروتونات فقط', en: 'By transfer of protons only' }, { ar: 'عن طريق خلق شحنات جديدة من العدم', en: 'By creating new charges from nothing' }, { ar: 'عن طريق تسخين الجسمين', en: 'By heating both objects' } ], correct: 0, answer: { ar: 'الشحن بالتلامس يعتمد على انتقال الإلكترونات الحرة بين الأجسام', en: 'Charging by contact relies on the transfer of free electrons between objects' } },
+                { q: { ar: 'عند تقريب شريط بلاستيكي مشحون بشحنة سالبة من شريط آخر مشحون بشحنة موجبة، ماذا يحدث؟', en: 'When a negatively charged plastic strip is brought near a positively charged one, what happens?' }, options: [ { ar: 'سيتجاذبان', en: 'They will attract' }, { ar: 'سيتنافران', en: 'They will repel' }, { ar: 'لا يحدث شيء', en: 'Nothing happens' }, { ar: 'يتحولان إلى موصلين', en: 'They turn into conductors' } ], correct: 0, answer: { ar: 'الشحنات المختلفة (موجب وسالب) تتجاذب', en: 'Opposite charges (positive and negative) attract' } },
+                { q: { ar: 'لماذا تنتقل الإلكترونات ولا تنتقل البروتونات عند فرك جسمين؟', en: 'Why do electrons move and not protons when two objects are rubbed?' }, options: [ { ar: 'لأن الإلكترونات أخف وزناً وتقع في المدارات الخارجية للذرة', en: 'Because electrons are lighter and located in the outer orbits of the atom' }, { ar: 'لأن البروتونات لا تحمل شحنة', en: 'Because protons carry no charge' }, { ar: 'لأن الإلكترونات أكبر حجماً من البروتونات', en: 'Because electrons are larger than protons' }, { ar: 'لأن البروتونات تتحرك بسرعة الضوء', en: 'Because protons move at the speed of light' } ], correct: 0, answer: { ar: 'الإلكترونات حرة الحركة نسبياً وخفيفة، بينما البروتونات مقيدة في النواة', en: 'Electrons are relatively free-moving and light, while protons are bound in the nucleus' } },
+                { q: { ar: 'إذا فركت بالوناً بشعرك، التصق البالون بالشعر. ما السبب؟', en: 'If you rub a balloon on your hair, it sticks to the hair. Why?' }, options: [ { ar: 'اكتسب البالون والشعر شحنات مختلفة، فتجاذبا', en: 'The balloon and hair gained opposite charges, so they attracted' }, { ar: 'اكتسب البالون والشعر نفس الشحنة', en: 'The balloon and hair gained the same charge' }, { ar: 'بسبب الجاذبية الأرضية فقط', en: 'Due to Earth gravity only' }, { ar: 'بسبب الحرارة الناتجة عن الفرك', en: 'Due to heat generated by rubbing' } ], correct: 0, answer: { ar: 'ينتقل الإلكترون من الشعر للبالون، فيصبح الشعر موجباً والبالون سالباً، فيتجاذبان', en: 'Electrons move from hair to balloon, making hair positive and balloon negative, causing attraction' } },
+                { q: { ar: 'ما الذي يحدث للشحنة الكلية لنظام مغلق قبل وبعد عملية الشحن؟', en: 'What happens to the total charge of a closed system before and after charging?' }, options: [ { ar: 'تبقى ثابتة (محفوظة)', en: 'Remains constant (conserved)' }, { ar: 'تزداد', en: 'Increases' }, { ar: 'تقل', en: 'Decreases' }, { ar: 'تصبح صفراً دائماً', en: 'Always becomes zero' } ], correct: 0, answer: { ar: 'قانون حفظ الشحنة ينص على أن الشحنة الكلية لا تتغير', en: 'The law of conservation of charge states that total charge does not change' } },
+                { q: { ar: 'عندما يفقد جسم (A) إلكترونات لجسم (B)، فإن شحنة الجسم (A) تصبح:', en: 'When object A loses electrons to object B, the charge of object A becomes:' }, options: [ { ar: 'موجبة', en: 'Positive' }, { ar: 'سالبة', en: 'Negative' }, { ar: 'متعادلة', en: 'Neutral' }, { ar: 'بلازما', en: 'Plasma' } ], correct: 0, answer: { ar: 'فقدان الإلكترونات (السالبة) يترك فائضاً من البروتونات (الموجبة)', en: 'Losing (negative) electrons leaves an excess of (positive) protons' } },
+                { q: { ar: 'عندما يكتسب جسم (X) إلكترونات من جسم (Y)، فإن شحنة الجسم (X) تصبح:', en: 'When object X gains electrons from object Y, the charge of object X becomes:' }, options: [ { ar: 'سالبة', en: 'Negative' }, { ar: 'موجبة', en: 'Positive' }, { ar: 'متعادلة', en: 'Neutral' }, { ar: 'غير محددة', en: 'Undefined' } ], correct: 0, answer: { ar: 'اكتساب إلكترونات إضافية يجعل الشحنة الكلية سالبة', en: 'Gaining extra electrons makes the net charge negative' } },
+                { q: { ar: 'تجربة الشريطين البلاستيكيين تثبت أن:', en: 'The two plastic strips experiment proves that:' }, options: [ { ar: 'الشحنات المتشابهة تتنافر', en: 'Like charges repel' }, { ar: 'الشحنات المختلفة تتنافر', en: 'Opposite charges repel' }, { ar: 'الشحنات لا تتأثر ببعضها', en: 'Charges do not affect each other' }, { ar: 'البلاستيك موصل ممتاز', en: 'Plastic is an excellent conductor' } ], correct: 0, answer: { ar: 'الشريطان يكتسبان نفس الشحنة بالسالب، مما يسبب التنافر', en: 'Both strips gain negative charge, causing repulsion' } }
+            ]
+        },
+        {
+            id: 'sec4',
+            title: { ar: '🔹 الجزء الرابع: الموصلات والعوازل والتطبيقات', en: '🔹 Part 4: Conductors, Insulators and Applications' },
+            questions: [
+                { 
+                    q: { ar: 'لماذا تُغطى الأسلاك الكهربائية من الداخل بالنحاس ومن الخارج بالبلاستيك؟', en: 'Why are electrical wires coated with copper inside and plastic outside?' },
+                    image: svgWireStructure,
+                    options: [ { ar: 'لأن النحاس موصل ينقل التيار، والبلاستيك عازل يمنع التسرب ويحمي من الصعق', en: 'Copper is a conductor that transfers current, and plastic is an insulator that prevents leakage and protects from shock' }, { ar: 'لأن البلاستيك موصل والنحاس عازل', en: 'Because plastic is a conductor and copper is an insulator' }, { ar: 'لجعل السلك أثقل وزناً', en: 'To make the wire heavier' }, { ar: 'لأن كلاهما عوازل لمنع الكهرباء', en: 'Because both are insulators to stop electricity' } ], 
+                    correct: 0, 
+                    answer: { ar: 'النحاس ينقل الكهرباء بكفاءة، والبلاستيك يعزلها لحماية المستخدم', en: 'Copper efficiently conducts electricity, while plastic insulates it to protect the user' } 
+                },
+                { q: { ar: 'لماذا تظهر الكهرباء الساكنة بوضوح في الأيام الجافة أكثر من الأيام الرطبة؟', en: 'Why does static electricity appear more clearly on dry days than on humid days?' }, options: [ { ar: 'لأن الهواء الجاف عازل جيد يمنع تسرب الشحنات، بينما الرطوبة تجعل الهواء موصلاً جزئياً', en: 'Because dry air is a good insulator preventing charge leakage, while humidity makes air partially conductive' }, { ar: 'لأن الرطوبة تزيد من احتكاك الأجسام', en: 'Because humidity increases friction between objects' }, { ar: 'لأن الهواء الجاف يحتوي على إلكترونات حرة أكثر', en: 'Because dry air contains more free electrons' }, { ar: 'لأن الحرارة في الأيام الجافة تدمر الشحنات', en: 'Because heat in dry days destroys charges' } ], correct: 0, answer: { ar: 'الرطوبة تجعل الهواء موصلاً جزئياً، مما يساعد على تفريغ الشحنات المتراكمة بسرعة', en: 'Humidity makes air partially conductive, helping to discharge accumulated charges quickly' } },
+                { q: { ar: 'ما دور الرطوبة في الهواء بالنسبة للكهرباء الساكنة؟', en: 'What is the role of humidity in the air regarding static electricity?' }, options: [ { ar: 'تجعل الهواء موصلاً جزئياً، مما يساعد على تفريغ الشحنات المتراكمة', en: 'Makes air partially conductive, helping to discharge accumulated charges' }, { ar: 'تزيد من تراكم الشحنات الساكنة', en: 'Increases the accumulation of static charges' }, { ar: 'تحول العوازل إلى موصلات فائقة', en: 'Turns insulators into superconductors' }, { ar: 'لا تؤثر على الشحنات الكهربائية', en: 'Has no effect on electric charges' } ], correct: 0, answer: { ar: 'جزيئات الماء في الهواء الرطب تساعد على تسريب الشحنات ببطء', en: 'Water molecules in humid air help leak charges slowly' } },
+                { q: { ar: 'أي من المواد التالية يُعد أفضل عازل كهربائي للاستخدام في الأدوات اليدوية؟', en: 'Which of the following is the best electrical insulator for use in hand tools?' }, options: [ { ar: 'المطاط الجاف', en: 'Dry rubber' }, { ar: 'الألمنيوم', en: 'Aluminum' }, { ar: 'الحديد', en: 'Iron' }, { ar: 'مياه البحر', en: 'Seawater' } ], correct: 0, answer: { ar: 'المطاط الجاف عازل ممتاز يمنع مرور التيار', en: 'Dry rubber is an excellent insulator that prevents current flow' } },
+                { q: { ar: 'لماذا يقف شعر الرأس عند تمشيطه بمشط بلاستيكي جاف؟', en: 'Why does hair stand up when combed with a dry plastic comb?' }, options: [ { ar: 'لأن خصلات الشعر تكتسب نفس نوع الشحنة فتتنافر مع بعضها، وتتجاذب مع المشط', en: 'Because hair strands gain the same charge and repel each other, while attracting the comb' }, { ar: 'لأن المشط يسخن الشعر', en: 'Because the comb heats the hair' }, { ar: 'لأن الشعر يفقد كتلته', en: 'Because hair loses its mass' }, { ar: 'بسبب الجاذبية المغناطيسية', en: 'Due to magnetic gravity' } ], correct: 0, answer: { ar: 'الشحنات المتشابهة في خصلات الشعر تتنافر، مما يجعلها تنتشر وتقف', en: 'Like charges in hair strands repel, causing them to spread and stand up' } },
+                { q: { ar: 'ما الذي يجعل البلازما موصلاً جيداً للكهرباء مقارنة بالغاز العادي؟', en: 'What makes plasma a good conductor of electricity compared to normal gas?' }, options: [ { ar: 'وجود إلكترونات حرة وأيونات موجبة قادرة على الحركة', en: 'The presence of free electrons and positive ions capable of movement' }, { ar: 'كثافتها العالية جداً', en: 'Its very high density' }, { ar: 'انخفاض درجة حرارتها', en: 'Its low temperature' }, { ar: 'خلوها من أي جسيمات مشحونة', en: 'Its lack of any charged particles' } ], correct: 0, answer: { ar: 'البلازما مؤينة، مما يوفر حاملات شحنة حرة الحركة', en: 'Plasma is ionized, providing free-moving charge carriers' } },
+                { q: { ar: 'إذا لمس شخص كرة معدنية مشحونة وهو يقف على أرضية رخامية جافة، ماذا يحدث؟', en: 'If a person touches a charged metal sphere while standing on a dry marble floor, what happens?' }, options: [ { ar: 'تنتقل الشحنة إلى الجسم لأن الرخام عازل ولا يسمح بتفريغها للأرض', en: 'Charge transfers to the body because marble is an insulator and does not allow discharge to the ground' }, { ar: 'تفرغ الشحنة فوراً في الأرض', en: 'The charge discharges immediately into the ground' }, { ar: 'لا يحدث أي انتقال للشحنة', en: 'No charge transfer occurs' }, { ar: 'تتحول الشحنة إلى ضوء', en: 'The charge converts to light' } ], correct: 0, answer: { ar: 'العازل يمنع وصول الشحنة للأرض، فتنتقل للجسم', en: 'The insulator prevents charge from reaching the ground, so it transfers to the body' } },
+                { q: { ar: 'أي من التالي يعتبر تطبيقاً عملياً لفائدة العوازل؟', en: 'Which of the following is a practical application of the benefit of insulators?' }, options: [ { ar: 'مقابض أدوات الكهربائي المصنوعة من البلاستيك أو المطاط', en: 'Electrician tool handles made of plastic or rubber' }, { ar: 'الأسلاك الداخلية للأجهزة', en: 'Internal wires of devices' }, { ar: 'أعمدة نقل الكهرباء المعدنية', en: 'Metallic electricity transmission poles' }, { ar: 'صفائح الألمنيوم في الطائرات', en: 'Aluminum sheets in airplanes' } ], correct: 0, answer: { ar: 'المقابض العازلة تحمي الكهربائي من الصعق', en: 'Insulating handles protect the electrician from shock' } },
+                { q: { ar: 'ما الفرق الأساسي بين الموصل والعازل من حيث البنية الذرية؟', en: 'What is the fundamental difference between a conductor and an insulator in terms of atomic structure?' }, options: [ { ar: 'الموصل يحتوي على إلكترونات حرة الحركة، بينما العازل ترتبط إلكتروناته بقوة بالنواة', en: 'Conductors have free-moving electrons, while insulators have electrons tightly bound to the nucleus' }, { ar: 'الموصل لا يحتوي على إلكترونات', en: 'Conductors contain no electrons' }, { ar: 'العازل يحتوي على بروتونات حرة', en: 'Insulators contain free protons' }, { ar: 'لا يوجد فرق، كلاهما متشابه', en: 'No difference, both are similar' } ], correct: 0, answer: { ar: 'حرية حركة الإلكترونات هي الفاصل الرئيسي بين الموصلات والعوازل', en: 'Freedom of electron movement is the main divider between conductors and insulators' } },
+                { q: { ar: 'لماذا لا نستخدم الخشب الرطب كأداة عزل كهربائي؟', en: 'Why do we not use wet wood as an electrical insulating tool?' }, options: [ { ar: 'لأن الماء يجعله موصلاً جزئياً للكهرباء', en: 'Because water makes it partially conductive to electricity' }, { ar: 'لأنه يصبح خفيفاً جداً', en: 'Because it becomes too light' }, { ar: 'لأنه يتحول إلى بلازما', en: 'Because it turns into plasma' }, { ar: 'لأنه يجذب البروتونات', en: 'Because it attracts protons' } ], correct: 0, answer: { ar: 'الرطوبة تكسر خاصية العزل في الخشب وتجعله ينقل التيار', en: 'Moisture breaks the insulating property of wood and makes it conduct current' } }
+            ]
+        },
+        {
+            id: 'sec5',
+            title: { ar: '🔹 الجزء الخامس: التفريغ الكهربائي والتفكير النقدي', en: '🔹 Part 5: Electrical Discharge and Critical Thinking' },
+            questions: [
+                { 
+                    q: { ar: 'ما المقصود بـ "تفريغ الشحنة" أو "التأريض" (Grounding)؟', en: 'What is meant by "discharging" or "grounding"?' },
+                    image: svgGrounding,
+                    options: [ { ar: 'توصيل الجسم المشحون بالأرض لنقل الشحنات الزائدة وتعادله', en: 'Connecting a charged object to the ground to transfer excess charges and neutralize it' }, { ar: 'زيادة شحن الجسم بالكهرباء', en: 'Increasing the charge of the object with electricity' }, { ar: 'عزل الجسم تماماً عن المحيط', en: 'Completely isolating the object from its surroundings' }, { ar: 'تحويل الجسم إلى موصل فائق', en: 'Turning the object into a superconductor' } ], 
+                    correct: 0, 
+                    answer: { ar: 'التأريض يسمح للشحنات الزائدة بالانتقال للأرض لتصبح الشحنة الكلية صفراً', en: 'Grounding allows excess charges to move to the earth, making net charge zero' } 
+                },
+                { q: { ar: 'إذا تم تأريض جسم مشحون بشحنة سالبة، في أي اتجاه تنتقل الإلكترونات؟', en: 'If a negatively charged object is grounded, in which direction do the electrons move?' }, options: [ { ar: 'من الجسم إلى الأرض', en: 'From the object to the ground' }, { ar: 'من الأرض إلى الجسم', en: 'From the ground to the object' }, { ar: 'لا تنتقل الإلكترونات', en: 'Electrons do not move' }, { ar: 'تنتقل البروتونات من الأرض للجسم', en: 'Protons move from ground to object' } ], correct: 0, answer: { ar: 'الإلكترونات الزائدة (السالبة) تتنافر وتنتقل إلى الأرض للتخلص من الفائض', en: 'Excess (negative) electrons repel and move to the ground to get rid of the surplus' } },
+                { q: { ar: 'إذا تم تأريض جسم مشحون بشحنة موجبة، في أي اتجاه تنتقل الإلكترونات؟', en: 'If a positively charged object is grounded, in which direction do the electrons move?' }, options: [ { ar: 'من الأرض إلى الجسم', en: 'From the ground to the object' }, { ar: 'من الجسم إلى الأرض', en: 'From the object to the ground' }, { ar: 'لا تنتقل الإلكترونات', en: 'Electrons do not move' }, { ar: 'تنتقل البروتونات من الجسم للأرض', en: 'Protons move from object to ground' } ], correct: 0, answer: { ar: 'الأرض تمد الجسم بالإلكترونات لتعويض النقص وإعادته للتعاادل', en: 'The ground supplies the object with electrons to compensate for the deficit and restore neutrality' } },
+                { q: { ar: 'تفكير نقدي: لماذا يُنصح بلمس جسم معدني كبير (مثل السيارة) بظهر اليد قبل فتح الباب في يوم جاف؟', en: 'Critical thinking: Why is it advised to touch a large metal object (like a car) with the back of the hand before opening the door on a dry day?' }, options: [ { ar: 'لتفريغ أي شحنة ساكنة متراكمة في الجسم ببطء وأمان دون صدمة مؤلمة', en: 'To slowly and safely discharge any accumulated static charge in the body without a painful shock' }, { ar: 'لشحن الجسم بالكهرباء', en: 'To charge the body with electricity' }, { ar: 'لاختبار درجة حرارة المعدن', en: 'To test the temperature of the metal' }, { ar: 'لتنظيف اليد من الأوساخ', en: 'To clean the hand from dirt' } ], correct: 0, answer: { ar: 'ظهر اليد أقل حساسية للألم، والتفريغ التدريجي يمنع الصدمة المفاجئة', en: 'The back of the hand is less sensitive to pain, and gradual discharge prevents sudden shock' } },
+                { q: { ar: 'ماذا يحدث لشحنة جسم متعادل عندما يلمس جسماً آخر مشحوناً بشحنة موجبة؟', en: 'What happens to the charge of a neutral object when it touches another object charged positively?' }, options: [ { ar: 'يصبح موجباً بسبب انتقال بعض الإلكترونات منه إلى الجسم الموجب', en: 'It becomes positive due to the transfer of some of its electrons to the positive object' }, { ar: 'يصبح سالباً', en: 'It becomes negative' }, { ar: 'يظل متعادلاً', en: 'It remains neutral' }, { ar: 'تنتقل البروتونات إليه', en: 'Protons transfer to it' } ], correct: 0, answer: { ar: 'الجسم الموجب يسحب إلكترونات من الجسم المتعادل، فيفقد المتعادل إلكترونات ويصبح موجباً', en: 'The positive object pulls electrons from the neutral object, making the neutral object lose electrons and become positive' } },
+                { q: { ar: 'في تجربة الصدمة عند مقبض الباب، ما هو دور جسم الإنسان؟', en: 'In the door handle shock experiment, what is the role of the human body?' }, options: [ { ar: 'يعمل كموصل يسمح بانتقال الشحنات المتراكمة فجأة إلى المقبض المعدني', en: 'Acts as a conductor allowing accumulated charges to suddenly transfer to the metal handle' }, { ar: 'يعمل كعازل يخزن الشحنات للأبد', en: 'Acts as an insulator storing charges forever' }, { ar: 'يولد بروتونات جديدة', en: 'Generates new protons' }, { ar: 'يمنع حدوث أي تفاعل كهربائي', en: 'Prevents any electrical reaction' } ], correct: 0, answer: { ar: 'جسم الإنسان موصل جيد، مما يسمح بتفريغ سريع للشحنات عند اللمس', en: 'The human body is a good conductor, allowing rapid discharge of charges upon contact' } },
+                { q: { ar: 'هل يمكن شحن جسم عن طريق نقل البروتونات من مكان لآخر؟', en: 'Can an object be charged by transferring protons from one place to another?' }, options: [ { ar: 'لا، لأن البروتونات مثبتة بقوة داخل نواة الذرة ولا تنتقل في الظروف العادية', en: 'No, because protons are tightly fixed inside the atomic nucleus and do not move under normal conditions' }, { ar: 'نعم، بسهولة تامة', en: 'Yes, very easily' }, { ar: 'نعم، ولكن في العوازل فقط', en: 'Yes, but only in insulators' }, { ar: 'نعم، عند درجات الحرارة المنخفضة جداً', en: 'Yes, at very low temperatures' } ], correct: 0, answer: { ar: 'الشحن يحدث دائماً بسبب حركة الإلكترونات، وليس البروتونات', en: 'Charging always occurs due to the movement of electrons, not protons' } },
+                { q: { ar: 'إذا كان لديك كرتان معدنيتان متلامستان، وقربت منهما قضيباً مشحوناً بشحنة سالبة دون لمسه، ماذا يحدث لتوزيع الشحنة في الكرتين؟', en: 'If you have two touching metal spheres, and you bring a negatively charged rod near them without touching, what happens to the charge distribution in the spheres?' }, options: [ { ar: 'تتنافر الإلكترونات في الكرتين، فتصبح الكرة القريبة من القضيب موجبة والبعيدة سالبة', en: 'Electrons in the spheres repel, making the sphere near the rod positive and the far one negative' }, { ar: 'تنتقل البروتونات نحو القضيب', en: 'Protons move toward the rod' }, { ar: 'تصبح كلتا الكرتين سالبتين', en: 'Both spheres become negative' }, { ar: 'لا يحدث أي تغيير', en: 'No change occurs' } ], correct: 0, answer: { ar: 'هذا يسمى الشحن بالحث، حيث تتنافر الإلكترونات الحرة وتبتعد عن القضيب السالب', en: 'This is called charging by induction, where free electrons repel and move away from the negative rod' } },
+                { q: { ar: 'ما الشرط الأساسي لكي يحدث تفريغ كهربائي شراري (مثل البرق)؟', en: 'What is the fundamental condition for a spark electrical discharge (like lightning) to occur?' }, options: [ { ar: 'وجود فرق جهد كهربائي كبير يتغلب على مقاومة العازل (مثل الهواء)', en: 'The presence of a large electric potential difference that overcomes the resistance of the insulator (like air)' }, { ar: 'وجود موصل فائق فقط', en: 'The presence of a superconductor only' }, { ar: 'انعدام الجاذبية', en: 'Absence of gravity' }, { ar: 'وجود فراغ تام', en: 'The presence of a perfect vacuum' } ], correct: 0, answer: { ar: 'عندما يصبح المجال الكهربائي قوياً بما يكفي لتأيين الهواء، يحدث الشرر', en: 'When the electric field becomes strong enough to ionize the air, a spark occurs' } },
+                { q: { ar: 'تفكير نقدي: لماذا تُثبت سلاسل معدنية في مؤخرة بعض الشاحنات التي تنقل مواد قابلة للاشتعال؟', en: 'Critical thinking: Why are metal chains attached to the back of some trucks transporting flammable materials?' }, options: [ { ar: 'لتفريغ أي شحنات ساكنة متراكمة على هيكل الشاحنة إلى الأرض ومنع حدوث شرر', en: 'To discharge any accumulated static charges on the truck body to the ground and prevent sparks' }, { ar: 'لزيادة وزن الشاحنة لتحسين الثبات', en: 'To increase the truck weight for better stability' }, { ar: 'لجعل الشاحنة تبدو أجمل', en: 'To make the truck look better' }, { ar: 'لشحن الشاحنة بالكهرباء باستمرار', en: 'To continuously charge the truck with electricity' } ], correct: 0, answer: { ar: 'السلسلة المعدنية تعمل كأرضي (Ground) لتفريغ الشحنات الناتجة عن احتكاك الإطارات بالطريق', en: 'The metal chain acts as a ground to discharge charges generated by tire friction with the road' } }
+            ]
+        }
+    ]
+};
+
+// ==================== Helper Functions ====================
+function shuffleArray(array) {
+    const arr = [...array];
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+}
+
+let examData;
+let correctAnswersMap = {};
+let currentLang = 'ar';
+let timeRemaining = 3600;
+let timerInterval;
+
+function prepareShuffledExam() {
+    examData = JSON.parse(JSON.stringify(originalExamData));
+    correctAnswersMap = {};
+    let globalIdx = 0;
+
+    examData.sections.forEach((section) => {
+        section.questions = shuffleArray(section.questions);
+        section.questions.forEach((q) => {
+            const optionsWithCorrect = q.options.map((opt, idx) => ({
+                option: opt,
+                isCorrect: idx === q.correct
+            }));
+
+            const shuffledOptions = shuffleArray(optionsWithCorrect);
+            q.options = shuffledOptions.map(o => o.option);
+            const newCorrectIndex = shuffledOptions.findIndex(o => o.isCorrect);
+            q.correct = newCorrectIndex;
+
+            correctAnswersMap[globalIdx] = String.fromCharCode(97 + newCorrectIndex);
+            globalIdx++;
+        });
+    });
+}
+
+function reshuffleExam() {
+    prepareShuffledExam();
+    renderExam();
+    document.querySelectorAll('input[type="radio"]:checked').forEach(r => r.checked = false);
+    document.getElementById('results-panel').classList.add('hidden');
+    document.querySelectorAll('.correct, .incorrect').forEach(el => {
+        el.classList.remove('correct', 'incorrect');
+    });
+    alert(currentLang === 'ar' ? '🔀 تم إعادة خلط الأسئلة والخيارات بنجاح!' : '🔀 Questions and options have been reshuffled successfully!');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function setLanguage(lang) {
+    currentLang = lang;
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+
+    document.getElementById('btn-ar').classList.toggle('active', lang === 'ar');
+    document.getElementById('btn-en').classList.toggle('active', lang === 'en');
+    document.body.classList.toggle('en-mode', lang === 'en');
+
+    document.querySelectorAll('[data-ar][data-en]').forEach(el => {
+        el.textContent = el.getAttribute(`data-${lang}`);
+    });
+
+    renderExam();
+}
+
+function renderExam() {
+    const container = document.getElementById('exam-content');
+    const labels = {
+        ar: { option: ['أ', 'ب', 'ج', 'د'], answer: '✅ الإجابة:' },
+        en: { option: ['A', 'B', 'C', 'D'], answer: '✅ Answer:' }
+    };
+    const lbl = labels[currentLang];
+    const isRTL = currentLang === 'ar';
+
+    let html = '';
+    let globalIdx = 0;
+
+    examData.sections.forEach((section) => {
+        html += `
+        <section class="bg-white p-6 rounded-xl shadow-lg">
+            <h2 class="text-xl font-bold mb-4 text-purple-700">${section.title[currentLang]}</h2>
+            <ol class="space-y-6 text-sm">`;
+
+        section.questions.forEach((q) => {
+            const borderSide = isRTL ? 'border-r-4 pr-4' : 'border-l-4 pl-4';
+            
+            const imageHtml = q.image ? `<div class="my-3 p-4 bg-gray-50 rounded-xl border border-gray-200 flex justify-center items-center print:bg-white">${q.image}</div>` : '';
+
+            html += `
+                <li class="${borderSide} border-purple-500 py-3" id="q-${globalIdx}">
+                    <strong>${globalIdx + 1}.</strong> ${q.q[currentLang]}
+                    ${imageHtml}
+                    <br>`;
+
+            q.options.forEach((opt, oIdx) => {
+                const radioSide = isRTL ? 'mr-4 ml-2' : 'ml-4 mr-2';
+                html += `
+                    <label class="cursor-pointer block mt-2 ${isRTL ? 'mr-4' : 'ml-4'}">
+                        <input type="radio" name="q${globalIdx}" value="${String.fromCharCode(97 + oIdx)}" class="${radioSide}">
+                        ${lbl.option[oIdx]}) ${opt[currentLang]}
+                    </label>`;
+            });
+
+            html += `
+                    <div class="answer-box text-green-700 mt-3 font-medium hidden">
+                        ${lbl.answer} ${lbl.option[q.correct]}) ${q.options[q.correct][currentLang]} — ${q.answer[currentLang]}
+                    </div>
+                </li>`;
+            globalIdx++;
+        });
+
+        html += `
+            </ol>
+        </section>`;
+    });
+
+    container.innerHTML = html;
+}
+
+function startTimer() {
+    document.getElementById('timer-container').style.display = 'block';
+    timerInterval = setInterval(() => {
+        timeRemaining--;
+        const minutes = Math.floor(timeRemaining / 60);
+        const seconds = timeRemaining % 60;
+        const timerEl = document.getElementById('timer');
+        timerEl.textContent = `${minutes.toString().padStart(2,'0')}:${seconds.toString().padStart(2,'0')}`;
+        if (timeRemaining <= 300) timerEl.classList.add('timer-warning');
+        if (timeRemaining <= 0) {
+            clearInterval(timerInterval);
+            alert(currentLang === 'ar' ? "انتهى الوقت! سيتم تسليم الامتحان تلقائياً." : "Time's up! Exam will be submitted automatically.");
+            gradeExam();
+        }
+    }, 1000);
+}
+
+function toggleAnswers() {
+    document.querySelectorAll('.answer-box').forEach(el => el.classList.toggle('hidden'));
+}
+
+function gradeExam() {
+    clearInterval(timerInterval);
+    let correctCount = 0;
+    let secScores = [0, 0, 0, 0, 0];
+
+    for (let i = 0; i < 50; i++) {
+        const selected = document.querySelector(`input[name="q${i}"]:checked`);
+        const li = document.getElementById(`q-${i}`);
+        const correctAnswer = correctAnswersMap[i];
+
+        if (li) {
+            const isCorrect = selected && selected.value === correctAnswer;
+            if (isCorrect) {
+                correctCount++;
+                li.classList.add('correct');
+                li.classList.remove('incorrect');
+                secScores[Math.floor(i / 10)]++;
+            } else {
+                li.classList.add('incorrect');
+                li.classList.remove('correct');
+            }
+        }
+    }
+
+    const score = correctCount; 
+    const successRate = Math.round((score / 50) * 100);
+
+    document.getElementById('res-total').textContent = `${score} / 50`;
+    document.getElementById('res-name').textContent = document.getElementById('studentName').value || (currentLang === 'ar' ? 'طالب' : 'Student');
+    document.getElementById('res-date').textContent = document.getElementById('examDate').value || new Date().toLocaleDateString(currentLang === 'ar' ? 'ar-AE' : 'en-US');
+
+    for (let i = 0; i < 5; i++) {
+        document.getElementById(`sec${i + 1}-score`).textContent = `${secScores[i]}/10`;
+    }
+
+    const badge = document.getElementById('success-badge');
+    const percent = document.getElementById('success-percent');
+    percent.textContent = `${successRate}%`;
+
+    if (currentLang === 'ar') {
+        if (successRate >= 90) { badge.textContent = 'ممتاز'; badge.className = 'success-badge grade-excellent'; }
+        else if (successRate >= 75) { badge.textContent = 'جيد جداً'; badge.className = 'success-badge grade-good'; }
+        else if (successRate >= 50) { badge.textContent = 'جيد'; badge.className = 'success-badge grade-pass'; }
+        else { badge.textContent = 'يحتاج تحسين'; badge.className = 'success-badge grade-fail'; }
+    } else {
+        if (successRate >= 90) { badge.textContent = 'Excellent'; badge.className = 'success-badge grade-excellent'; }
+        else if (successRate >= 75) { badge.textContent = 'Very Good'; badge.className = 'success-badge grade-good'; }
+        else if (successRate >= 50) { badge.textContent = 'Good'; badge.className = 'success-badge grade-pass'; }
+        else { badge.textContent = 'Needs Improvement'; badge.className = 'success-badge grade-fail'; }
+    }
+
+    document.getElementById('results-panel').classList.remove('hidden');
+    document.getElementById('results-panel').scrollIntoView({ behavior: 'smooth' });
+    document.getElementById('sendEmailBtn').classList.remove('hidden');
+}
+
+function sendResultsToEmail() {
+    const name = document.getElementById('studentName').value.trim();
+    if (!name) {
+        alert(currentLang === 'ar' ? '⚠️ يرجى إدخال اسم الطالب أولاً قبل إرسال النتائج.' : '⚠️ Please enter the student name before sending results.');
+        document.getElementById('studentName').focus();
+        return;
+    }
+
+    const btn = document.getElementById('sendEmailBtn');
+    const status = document.getElementById('emailStatus');
+    btn.disabled = true;
+    btn.textContent = currentLang === 'ar' ? '⏳ جاري الإرسال...' : '📤 Sending...';
+
+    const studentClass = document.getElementById('studentClass').value || 'N/A';
+    const date = document.getElementById('examDate').value || new Date().toLocaleDateString();
+    const score = document.getElementById('res-total').textContent;
+    const successRate = document.getElementById('success-percent').textContent;
+    const badge = document.getElementById('success-badge').textContent;
+
+    const sectionNames = {
+        ar: ['المفاهيم والمصطلحات الأساسية', 'خصائص الشحنات وقوانين التجاذب', 'آليات الشحن والتجارب العملية', 'الموصلات والعوازل والتطبيقات', 'التفريغ الكهربائي والتفكير النقدي'],
+        en: ['Basic Concepts and Terminology', 'Charge Properties and Attraction Laws', 'Charging Mechanisms and Experiments', 'Conductors, Insulators and Applications', 'Electrical Discharge and Critical Thinking']
+    };
+    const currentSectionNames = sectionNames[currentLang];
+
+    let answersHTML = `<div style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; direction: ${currentLang === 'ar' ? 'rtl' : 'ltr'};">
+        <div style="background: linear-gradient(135deg, #8b5cf6, #ec4899); color: white; padding: 20px; border-radius: 10px 10px 0 0; text-align: center;">
+            <h2 style="margin: 0; font-size: 22px;">📝 ${currentLang === 'ar' ? 'نتيجة امتحان الكهرباء الساكنة' : 'Static Electricity Exam Result'}</h2>
+        </div>
+        <div style="background: #f5f3ff; padding: 15px; border: 1px solid #e9d5ff;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr><td style="padding: 8px; font-weight: bold; color: #7c3aed;">${currentLang === 'ar' ? '👤 الاسم:' : '👤 Name:'}</td><td style="padding: 8px;">${name}</td><td style="padding: 8px; font-weight: bold; color: #7c3aed;">${currentLang === 'ar' ? '🏫 الشعبة:' : '🏫 Class:'}</td><td style="padding: 8px;">${studentClass}</td></tr>
+                <tr><td style="padding: 8px; font-weight: bold; color: #7c3aed;">${currentLang === 'ar' ? '📅 التاريخ:' : '📅 Date:'}</td><td style="padding: 8px;">${date}</td><td style="padding: 8px; font-weight: bold; color: #7c3aed;">${currentLang === 'ar' ? '🏆 التقدير:' : '🏆 Grade:'}</td><td style="padding: 8px;">${badge}</td></tr>
+            </table>
+        </div>
+        <div style="background: white; padding: 20px; text-align: center; border-bottom: 2px solid #e5e7eb;">
+            <div style="display: inline-block; margin: 0 15px;"><div style="font-size: 32px; font-weight: bold; color: #8b5cf6;">${score}</div><div style="color: #6b7280; font-size: 13px;">${currentLang === 'ar' ? 'الدرجة الكلية' : 'Total Score'}</div></div>
+            <div style="display: inline-block; margin: 0 15px;"><div style="font-size: 32px; font-weight: bold; color: #10b981;">${successRate}%</div><div style="color: #6b7280; font-size: 13px;">${currentLang === 'ar' ? 'نسبة النجاح' : 'Success Rate'}</div></div>
+        </div>
+        <h3 style="background: #f3f4f6; padding: 12px; margin: 0; color: #1f2937; border-bottom: 2px solid #d1d5db;">📝 ${currentLang === 'ar' ? 'تفاصيل الإجابات' : 'Answer Details'}</h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead><tr style="background: #8b5cf6; color: white;">
+                <th style="padding: 10px; border: 1px solid #7c3aed; width: 8%;">#</th>
+                <th style="padding: 10px; border: 1px solid #7c3aed; width: 32%;">${currentLang === 'ar' ? 'القسم' : 'Section'}</th>
+                <th style="padding: 10px; border: 1px solid #7c3aed; width: 15%;">${currentLang === 'ar' ? 'إجابة الطالب' : 'Student Answer'}</th>
+                <th style="padding: 10px; border: 1px solid #7c3aed; width: 15%;">${currentLang === 'ar' ? 'الصحيحة' : 'Correct'}</th>
+                <th style="padding: 10px; border: 1px solid #7c3aed; width: 15%;">${currentLang === 'ar' ? 'النتيجة' : 'Status'}</th>
+            </tr></thead><tbody>`;
+
+    let secScoresEmail = [0, 0, 0, 0, 0];
+    for (let i = 0; i < 50; i++) {
+        const selected = document.querySelector(`input[name="q${i}"]:checked`);
+        const selectedValue = selected ? selected.value.toUpperCase() : '-';
+        const correctValue = correctAnswersMap[i].toUpperCase();
+        const isCorrect = selectedValue === correctValue;
+        const sectionIndex = Math.floor(i / 10);
+        if (isCorrect) secScoresEmail[sectionIndex]++;
+
+        const rowBg = i % 2 === 0 ? '#f9fafb' : '#ffffff';
+        const statusBg = isCorrect ? '#dcfce7' : '#fee2e2';
+        const statusColor = isCorrect ? '#166534' : '#991b1b';
+        const statusIcon = isCorrect ? '✅' : '❌';
+        const statusText = isCorrect ? (currentLang === 'ar' ? 'صحيح' : 'Correct') : (currentLang === 'ar' ? 'خطأ' : 'Wrong');
+
+        answersHTML += `<tr style="background: ${rowBg};">
+            <td style="padding: 8px; border: 1px solid #e5e7eb; text-align: center; font-weight: bold;">${i + 1}</td>
+            <td style="padding: 8px; border: 1px solid #e5e7eb;">${currentSectionNames[sectionIndex]}</td>
+            <td style="padding: 8px; border: 1px solid #e5e7eb; text-align: center; font-weight: bold;">${selectedValue}</td>
+            <td style="padding: 8px; border: 1px solid #e5e7eb; text-align: center; font-weight: bold; color: #059669;">${correctValue}</td>
+            <td style="padding: 8px; border: 1px solid #e5e7eb; text-align: center; background: ${statusBg}; color: ${statusColor}; font-weight: bold;">${statusIcon} ${statusText}</td>
+        </tr>`;
+    }
+
+    answersHTML += `</tbody></table>
+        <h3 style="background: #f3f4f6; padding: 12px; margin: 0; color: #1f2937; border-bottom: 2px solid #d1d5db; border-top: 3px solid #8b5cf6;">📊 ${currentLang === 'ar' ? 'تفصيل الأداء' : 'Performance Breakdown'}</h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead><tr style="background: #7c3aed; color: white;">
+                <th style="padding: 10px; border: 1px solid #6d28d9;">${currentLang === 'ar' ? 'القسم' : 'Section'}</th>
+                <th style="padding: 10px; border: 1px solid #6d28d9; width: 20%;">${currentLang === 'ar' ? 'النتيجة' : 'Score'}</th>
+                <th style="padding: 10px; border: 1px solid #6d28d9; width: 20%;">${currentLang === 'ar' ? 'النسبة' : 'Percentage'}</th>
+            </tr></thead><tbody>`;
+
+    for (let i = 0; i < 5; i++) {
+        const percentage = Math.round((secScoresEmail[i] / 10) * 100);
+        const barColor = percentage >= 75 ? '#10b981' : percentage >= 50 ? '#f59e0b' : '#ef4444';
+        const rowBg = i % 2 === 0 ? '#f9fafb' : '#ffffff';
+        answersHTML += `<tr style="background: ${rowBg};">
+            <td style="padding: 10px; border: 1px solid #e5e7eb; font-weight: 600;">${currentSectionNames[i]}</td>
+            <td style="padding: 10px; border: 1px solid #e5e7eb; text-align: center; font-weight: bold; color: #8b5cf6;">${secScoresEmail[i]} / 10</td>
+            <td style="padding: 10px; border: 1px solid #e5e7eb;">
+                <div style="background: #e5e7eb; border-radius: 10px; overflow: hidden; height: 20px; position: relative;">
+                    <div style="background: ${barColor}; width: ${percentage}%; height: 100%;"></div>
+                    <span style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 11px; font-weight: bold; color: #1f2937;">${percentage}%</span>
+                </div>
+            </td>
+        </tr>`;
+    }
+
+    answersHTML += `</tbody></table>
+        <div style="background: linear-gradient(135deg, #fef3c7, #fde68a); padding: 15px; border-radius: 0 0 10px 10px; border-top: 2px solid #f59e0b;">
+            <p style="margin: 0; color: #78350f; text-align: center; font-size: 13px;">💡 <strong>${currentLang === 'ar' ? 'ملاحظة:' : 'Note:'}</strong> ${currentLang === 'ar' ? 'تم إرسال هذا التقرير تلقائياً من منصة 4U التعليمية | Mr. Mohammed Hesham' : 'This report was automatically sent from 4U Educational Platform | Mr. Mohammed Hesham'}</p>
+        </div></div>`;
+
+    const templateParams = {
+        to_email: TARGET_EMAIL,
+        student_name: name,
+        student_class: studentClass,
+        exam_date: date,
+        total_score: score,
+        success_rate: successRate,
+        grade: badge,
+        answers_table: answersHTML
+    };
+
+    emailjs.send(SERVICE_ID, TEMPLATE_ID, templateParams)
+        .then(() => {
+            status.textContent = currentLang === 'ar' ? '✅ تم إرسال النتائج بنجاح!' : '✅ Results sent successfully!';
+            status.style.color = '#059669';
+            btn.textContent = currentLang === 'ar' ? '✓ تم الإرسال' : '✓ Sent';
+        })
+        .catch(err => {
+            status.textContent = currentLang === 'ar' ? '❌ فشل الإرسال، تحقق من الاتصال أو إعدادات EmailJS' : '❌ Failed to send, check connection or EmailJS settings';
+            status.style.color = '#dc2626';
+            btn.disabled = false;
+            btn.textContent = currentLang === 'ar' ? '📧 إعادة المحاولة' : '📧 Retry Send';
+            console.error('EmailJS Error:', err);
+        });
+}
+
+// Initialize
+window.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('examDate').valueAsDate = new Date();
+    prepareShuffledExam();
+    renderExam();
+    startTimer();
+});
+</script>
+</body>
+</html>
